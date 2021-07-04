@@ -1,0 +1,215 @@
+global string $sorterWindow;
+global string $sorterDocker;
+global int $sorterCheck;
+
+$sorterWindow = `window`;
+
+
+global string $sorterScroll;
+$sorterScroll = `scrollLayout -horizontalScrollBarThickness 16 -verticalScrollBarThickness 16 -cr true`;
+
+global string $sorterOptions;
+$sorterOptions = `optionMenu -parent $sorterScroll -h 35 -changeCommand "reload" -bgc 0 0 0`;
+menuItem -label "Materials";
+menuItem -label "Lights";
+menuItem -label "Cameras";
+
+separator -h 5;
+
+global string $sorterReloadBtn;
+$sorterReloadBtn = `button -parent $sorterScroll -label "Full reload" -command "reload" -bgc 0.1 0.3 0.1`;
+global string $selectedMatBtn;
+$selectedMatBtn = `button -parent $sorterScroll -label "Materials from Selection" -command "reloadSelected"`;
+global string $createMaterialBtn;
+$createMaterialBtn = `button -parent $sorterScroll -label "New Material" -command "newMaterialWindow" -bgc 0 0 0.3`;
+
+//float $h = `layout -query -height $masterColumn`;
+separator -h 10;
+
+global string $sorterColumn;
+$sorterColumn = `columnLayout -parent $sorterScroll -columnAttach "both" 5 -rowSpacing 3 -columnWidth 450 -adj true`;
+
+
+$sorterDocker = `dockControl -ret false -area "left" -content $sorterWindow -label "Materials" -allowedArea "all"`;
+
+global string $keepSelection[];
+
+global proc string getShapeNode ( string $object ) {
+  string $shapes[] = `listRelatives -children -shapes $object`;
+  return $shapes[0];
+}
+
+global proc string[] getTransformNode(string $shape[]) {
+    string $transform[];
+    for ($node in $shape) {
+        if ( "transform" != `nodeType $node` ) {
+            string $parents[] = `listRelatives -parent $node`;
+            appendStringArray($transform, $parents, size($parents));
+        }
+    }
+    return $transform;
+}
+
+global proc reload ( ) {
+    global string $sorterColumn;
+    global string $sorterScroll;
+    global string $sorterOptions;
+    global string $selectedMatBtn;
+    global string $sorterReloadBtn;
+    global string $createMaterialBtn;
+    global int $sorterCheck;
+    global string $sorterDocker;
+    
+    $sorterCheck = 0;
+    
+    button -edit -bgc 0.1 0.3 0.1 $sorterReloadBtn ;
+    button -edit -bgc 0.1 0.1 0.1 $selectedMatBtn ;
+    deleteUI -layout $sorterColumn;
+    $sorterColumn = `columnLayout -parent $sorterScroll -columnAttach "both" 5 -rowSpacing 3 -columnWidth 450 -adj true`;
+    
+    string $val = `optionMenu -query -value $sorterOptions`;
+    
+    dockControl -edit -label $val $sorterDocker;
+    
+    string $items[];
+    
+    if($val == "Materials")
+    {
+    button -edit -enable true $selectedMatBtn;
+    button -edit -enable true $createMaterialBtn;
+    string $materials[] = `ls -materials -long`;
+    $materials = `sort $materials`;
+    $items = $materials;
+    }
+    else if($val == "Lights")
+    {
+    button -edit -enable false $selectedMatBtn;
+    button -edit -enable false $createMaterialBtn;
+    string $lights[] = `ls -lights -long`;
+    $lights = getTransformNode($lights);
+    $lights = `sort $lights`;
+    $items = $lights;
+    }
+    else
+    {
+    button -edit -enable false $selectedMatBtn;
+    button -edit -enable false $createMaterialBtn;
+    string $cameras[] = `ls -cameras -long`;
+    $cameras = getTransformNode($cameras);
+    $cameras = `sort $cameras`;
+    $items = $cameras;
+    }
+    for($item in $items)
+    {
+        //if( $item != "lambert1" && $item != "particleCloud1" )
+        //{
+            button -parent $sorterColumn -label $item -command ("clicked "+$item);
+        //}
+    }
+}
+
+global proc reloadSelected ( ) {
+    global string $sorterColumn;
+    global string $sorterScroll;
+    global string $selectedMatBtn;
+    global string $sorterOptions;
+    global int $sorterCheck;
+    global string $keepSelection[];
+    
+    button -edit -bgc 0.1 0.3 0.1 $selectedMatBtn ;
+    $keepSelection = `ls -sl`;
+    $sorterCheck = 1;
+    deleteUI -layout $sorterColumn;
+    $sorterColumn = `columnLayout -parent $sorterScroll -columnAttach "both" 5 -rowSpacing 3 -columnWidth 450 -adj true`;
+    
+    string $val = `optionMenu -query -value $sorterOptions`;
+    
+    string $items[];
+    
+    hyperShade -smn;
+    
+    string $materials[] = `ls -sl`;
+    $materials = `sort $materials`;
+    $items = $materials;
+    
+    for($item in $items)
+    {
+        //if( $item != "lambert1" && $item != "particleCloud1" )
+        //{
+            button -parent $sorterColumn -label $item -command ("clicked "+$item);
+        //}
+    }
+}
+
+global proc clicked(string $item ) 
+{   
+    global string $sorterOptions;
+    string $val = `optionMenu -query -value $sorterOptions`;
+    int $mods = `getModifiers`;
+    if (($mods / 4) % 2  && ($mods / 1) % 2 && $val == "Materials")
+    {
+        hyperShade -objects $item;
+    }
+    else if (($mods / 4) % 2 && $val == "Materials")
+    {
+        hyperShade -assign $item;
+    }
+    else if (($mods / 4) % 2 && $val == "Cameras")
+    {
+        select $item;
+        lookThroughSelected 0 modelPanel4;
+    }
+    else if(($mods / 1) % 2)
+    {
+        promptDialog -message "Enter name:" -button "Ok" -button "Cancel" -defaultButton "Ok" -cancelButton "Cancel" -dismissString "Cancel";
+        string $newName = `promptDialog -query`;
+        rename $item $newName;
+    }
+    else
+    {
+       select $item;
+    } 
+}
+
+scriptJob -parent $sorterScroll -e "NameChanged" "sceneChanged 0";
+scriptJob -parent $sorterScroll -e "SceneOpened" "reload";
+//scriptJob -e "DagObjectCreated" "sceneChanged";
+//scriptJob -e "PostSceneRead" "sceneChanged";
+scriptJob -parent $sorterScroll -e "SelectionChanged" "sceneChanged 1";
+//scriptJob -ct "delete" "sceneChanged";
+
+global proc sceneChanged(int $mode)
+{
+    global string $sorterReloadBtn;
+    global int $sorterCheck;
+    global string $keepSelection[];
+    string $oldSelection[];
+    print "\n";
+    print `selectMode -q -component`;
+    $oldSelection = `ls -sl`;
+    print $oldSelection;
+    button -edit -bgc 0.2 0 0 $sorterReloadBtn;
+    if($sorterCheck == 0)
+    {
+        reload();
+    }
+    else if($mode==0)
+    {
+        select $keepSelection;
+        reloadSelected();
+    }
+    select -cl;
+    select $oldSelection;
+}
+
+global proc newMaterialWindow()
+{
+	string $lambert1 = "lambert1";
+	string $sel[] = `ls -l -sl`;
+	source doCreateAssignNewMaterialTreeLister.mel;
+
+	if ( $sel[0] == "" ) { createAssignNewMaterialTreeLister $lambert1; }
+	else { createAssignNewMaterialTreeLister ""; }
+	sceneChanged(0);
+}
+reload();

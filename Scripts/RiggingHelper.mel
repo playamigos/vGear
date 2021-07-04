@@ -1,0 +1,260 @@
+global string $rigWindow;
+global string $rigDocker;
+
+if(`dockControl -ex "rigDocker"`)
+{
+deleteUI -layout "rigDocker";
+}
+$rigWindow = `window`;
+
+
+string $rigScroll = `scrollLayout -horizontalScrollBarThickness 16 -verticalScrollBarThickness 16 -cr true`;
+
+columnLayout -parent $rigScroll -columnAttach "both" 5 -rowSpacing 3 -columnWidth 450 -adj true;
+
+
+button -label "Create new BindPose" -command "dagPose -bp -s";
+button -label "Change Selected to Reference" -command "changeToReferenceMode";
+button -label "Change Selected to Normal" -command "changeToNormalMode";
+separator -h 20;
+button -label "Create Controls" -command "CreateControls";
+button -label "Scale Up" -command "TransformShape 0";
+button -label "Scale Down" -command "TransformShape 1";
+button -label "Rotate X" -command "TransformShape 2";
+button -label "Rotate Y" -command "TransformShape 3";
+button -label "Rotate Z" -command "TransformShape 4";
+separator -h 20;
+button -label "Circle" -command "SwapControl 0";
+button -label "Square" -command "SwapControl 1";
+button -label "Box" -command "SwapControl 2";
+button -label "BiDirectional" -command "SwapControl 3";
+separator -h 20;
+frameLayout -labelVisible 0;
+
+palettePort -ced false -height 150 -td 1 -dim 8 4 rigpalette;
+
+button -label "Clear Last Selection" -command "ClearStoredCurve";
+
+$rigDocker = `dockControl -ret false -area "left" -content $rigWindow	-label "Rigging" -allowedArea "all" rigDocker`;
+
+
+global proc buildPalette()
+{
+palettePort -edit -cc "" rigpalette;
+palettePort -edit -transparent 0 rigpalette;
+for( $i=1; $i<32; ++$i )
+{
+    vector $c = `colorIndex -q $i`;
+    palettePort -edit -rgb $i ($c.x) ($c.y) ($c.z) rigpalette;
+}
+palettePort -edit -redraw rigpalette;
+palettePort -edit -cc "changeCurveColor" rigpalette;
+}
+
+global string $storeCurveSelection[];
+
+global proc ClearStoredCurve(){
+global string $storeCurveSelection[];
+clear $storeCurveSelection;
+}
+
+global proc changeCurveColor(){
+global string $storeCurveSelection[];
+int $idx = `palettePort -query -scc rigpalette`;
+string $curves[]=`ls -sl`;
+if(size($curves)<=0)
+{
+    $curves = $storeCurveSelection;
+}
+if(size($curves)<=0){print("select curves");}else{
+for($curve in $curves)
+{
+    string $shapes[] = `listRelatives -s $curve`;
+    for($shape in $shapes)
+    {
+        setAttr($shape + ".overrideEnabled", 1);
+        setAttr($shape + ".overrideColor", $idx);
+    }
+}
+$storeCurveSelection = $curves;
+select -clear;
+}
+}
+
+global proc changeToReferenceMode(){
+string $objects[]=`ls -sl`;
+if(size($objects)<=0){print("select something");}else{
+for($object in $objects)
+{
+    string $shapes[] = `listRelatives -s $object`;
+    for($shape in $shapes)
+    {
+        setAttr($shape + ".overrideEnabled", 1);
+        setAttr($shape + ".overrideDisplayType", 2);
+    }
+}
+select -clear;
+}
+}
+
+global proc changeToNormalMode(){
+string $objects[]=`ls -sl`;
+if(size($objects)<=0){print("select something");}else{
+for($object in $objects)
+{
+    string $shapes[] = `listRelatives -s $object`;
+    for($shape in $shapes)
+    {
+        setAttr($shape + ".overrideEnabled", 1);
+        setAttr($shape + ".overrideDisplayType", 0);
+    }
+}
+}
+}
+
+buildPalette();
+
+global proc CreateControls()
+{
+string $s[] = `ls -sl`;
+
+for($ss in $s)
+{
+
+string $gn = $ss + "_ctrlGrp";
+string $cn = $ss + "_ctrl"; 
+
+select -cl;
+string $g = `group -em -name $gn`;
+string $ctrl[] = `circle -nr 1 0 0 -c 0 0 0 -r 2 -n $cn`;
+string $c = $ctrl[0];
+select $c;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;
+select -add $g;
+Parent;
+
+select -cl;
+select $ss;
+select -add $g;
+doCreateParentConstraintArgList 1 { "0","0","0","0","0","0","0","0","1","","1" };
+parentConstraint -mo -weight 1;
+select $g;
+delete -cn;
+
+select $g;
+select -add $ss;
+Parent;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;
+Unparent;
+
+select $c;
+makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;
+
+
+select -cl;
+select $c;
+select -add $ss;
+doCreateParentConstraintArgList 1 { "1","0","0","0","0","0","0","0","1","","1" };
+parentConstraint -mo -weight 1;
+
+select -cl;
+select $c;
+select -add $ss;
+doCreateScaleConstraintArgList 1 { "1","1","1","1","0","0","0","1","","1" };
+scaleConstraint -mo -weight 1;
+
+select -cl;
+}
+
+for($ss in $s)
+{
+    string $p[] = `listRelatives -allParents $ss`;
+    if(stringArrayContains($p[0], $s) == 1)
+    {
+        string $c1 = $ss + "_ctrlGrp";
+        string $c2 = $p[0] + "_ctrl";
+        select $c1;
+        select -add $c2;
+        Parent;
+    }
+}
+}
+
+global proc TransformShape(int $mode)
+{
+    string $sels[] = `ls -sl`;
+    for($sel in $sels)
+    {
+        string $shapes[] = `listRelatives -s $sel`;
+        for($shape in $shapes)
+        {
+            string $g = `group -em -name "tmpGrp"`;
+            select $shape;
+            select -add $g;
+            parent -r -s;
+            select $g;
+            if($mode==0)
+                scale -r 1.1 1.1 1.1 ;
+            else if($mode==1)
+                scale -r 0.9 0.9 0.9 ;
+            else if($mode==2)
+                rotate -r -os -fo 90 0 0 ;
+            else if($mode==3)                
+                rotate -r -os -fo 0 90 0 ;
+            else if($mode==4)
+                rotate -r -os -fo 0 0 90 ;
+            
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;
+            select $shape;
+            select -add $sel;
+            parent -r -s;
+            delete $g;
+        }
+    }
+    select $sels;
+}
+
+
+global proc SwapControl(int $mode)
+{
+    string $sels[] = `ls -sl`;
+    for($sel in $sels)
+    {
+        string $shapes[] = `listRelatives -s $sel`;
+        if(size($shapes) > 0)
+        {
+        for($shape in $shapes)
+        {
+            delete $shape;
+        }
+        string $prox;
+        
+        if($mode==0)
+        {
+            string $tmp[];
+            $tmp = `circle -c 0 0 0 -nr 0 1 0 -sw 360 -r 1 -d 3 -ut 0 -tol 0.01 -s 8 -ch 1`;
+            $prox = $tmp[0];
+        }
+        else if($mode==1)            
+            $prox = `curve -d 1 -p 1 0 1 -p 1 0 -1 -p -1 0 -1 -p -1 0 1 -p 1 0 1 -k 0 -k 1 -k 2 -k 3 -k 4`;
+        else if($mode==2)            
+            $prox = `curve -d 1 -p -0.97835 0.97835 0.97835 -p 0.97835 0.97835 0.97835 -p 0.97835 -0.97835 0.97835 -p -0.97835 -0.97835 0.97835 -p -0.97835 0.97835 0.97835 -p -0.97835 0.97835 -0.97835 -p -0.97835 -0.97835 -0.97835 -p -0.97835 -0.97835 0.97835 -p -0.97835 -0.97835 -0.97835 -p 0.97835 -0.97835 -0.97835 -p 0.97835 -0.97835 0.97835 -p 0.97835 -0.97835 -0.97835 -p 0.97835 0.97835 -0.97835 -p 0.97835 0.97835 0.97835 -p 0.97835 0.97835 -0.97835 -p -0.97835 0.97835 -0.97835 -k 0 -k 1 -k 2 -k 3 -k 4 -k 5 -k 6 -k 7 -k 8 -k 9 -k 10 -k 11 -k 12 -k 13 -k 14 -k 15`;
+        else if($mode==3)
+        {                        
+            $prox = `curve -d 1 -p -1 0 -1 -p -1 0 -3 -p -2 0 -3 -p 0 0 -5 -p 2 0 -3 -p 1 0 -3 -p 1 0 -1 -p 3 0 -1 -p 3 0 -2 -p 5 0 0 -p 3 0 2 -p 3 0 1 -p 1 0 1 -p 1 0 3 -p 2 0 3 -p 0 0 5 -p -2 0 3 -p -1 0 3 -p -1 0 1 -p -3 0 1 -p -3 0 2 -p -5 0 0 -p -3 0 -2 -p -3 0 -1 -p -1 0 -1 -k 0 -k 1 -k 2 -k 3 -k 4 -k 5 -k 6 -k 7 -k 8 -k 9 -k 10 -k 11 -k 12 -k 13 -k 14 -k 15 -k 16 -k 17 -k 18 -k 19 -k 20 -k 21 -k 22 -k 23 -k 24`;
+            scale -r 0.33 0.33 0.33 ;
+            select $prox;
+            makeIdentity -apply true -t 1 -r 1 -s 1 -n 0 -pn 1;
+        }
+        select $prox;
+        DeleteHistory;
+        $shapes = `listRelatives -s $prox`; 
+        rename $shapes[0] ($sel+"Shape");
+        $shapes[0] = $sel + "Shape";  
+        select $shapes[0];
+        select -add $sel;
+        parent -r -s;
+        delete $prox;
+    }}
+    select $sels;
+}

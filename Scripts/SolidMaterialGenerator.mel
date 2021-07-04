@@ -1,0 +1,83 @@
+global string $smgWindow;
+global string $smgDocker;
+
+if(`dockControl -ex "smgDocker"`)
+{
+deleteUI -layout "smgDocker";
+}
+$smgWindow = `window`;
+
+global string $smgScroll;
+$smgScroll = `scrollLayout -horizontalScrollBarThickness 16 -verticalScrollBarThickness 16 -cr true`;
+
+
+frameLayout -parent $smgScroll -labelVisible 0;
+
+palettePort -ced false -height 390 -td 1 -dim 9 13 palette;
+     
+$smgDocker = `dockControl -ret false -area "left" -content $smgWindow	-label "SMG" -allowedArea "all" smgDocker`;
+
+global proc buildPalette()
+{
+palettePort -edit -cc "" palette;
+
+vector $hues[] = {
+    <<1,0,0>>,
+    <<0.66,0.33,0>>,
+    <<1,1,0>>,
+    <<0.33,0.66,0>>,
+    <<0,1,0>>,
+    <<0,0.66,0.33>>,
+    <<0,1,1>>,
+    <<0,0.33,0.66>>,
+    <<0,0,1>>,
+    <<0.33,0,0.66>>,
+    <<1,0,1>>,
+    <<0.66,0,0.33>>
+    };
+
+for( $i=0; $i<9; ++$i )
+{
+    float $t = $i;$t = $t/8;
+    palettePort -edit -rgb $i $t $t $t palette;
+}
+for( $i=9; $i<117; ++$i )
+{
+    int $rowPos = ($i%9);
+    int $colPos = $i/9;
+    vector $currentHue = $hues[$colPos-1];
+    vector $result = $currentHue;
+    if($rowPos < 4)
+    {
+        float $factor = ($rowPos + 1)*0.2;
+        $result = $currentHue * $factor;
+    }
+    else if ($rowPos > 4)
+    {
+        vector $unit = <<1,1,1>>;
+        vector $factor = ($unit - $currentHue)*($rowPos - 4)*0.2;
+        $result = $currentHue + $factor;
+    }
+    palettePort -edit -rgb $i ($result.x) ($result.y) ($result.z) palette;
+}
+palettePort -edit -redraw palette;
+palettePort -edit -cc "createSolidMat" palette;
+}
+
+global proc createSolidMat(){
+vector $color = `palettePort -query -rgb palette`;
+string $selectA[]=`ls -sl`;
+if(size($selectA)<=0){print("select object or faces please!");}else{
+float $r=$color.x;
+float $g=$color.y;
+float $b=$color.z;
+$crelambert=`shadingNode -as lambert`;
+setAttr ($crelambert+".color") -type double3  $r $g $b;
+
+select $selectA;
+hyperShade -assign $crelambert;
+hyperShadePanelMenuCommand("hyperShadePanel1", "deleteUnusedNodes");
+}
+}
+
+buildPalette();

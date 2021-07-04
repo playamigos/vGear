@@ -1,0 +1,111 @@
+global string $vsWindow;
+global string $vsDocker;
+
+if(`dockControl -ex "vsDocker"`)
+{
+deleteUI -layout "vsDocker";
+}
+$vsWindow = `window`;
+
+
+string $vsScroll = `scrollLayout -horizontalScrollBarThickness 16 -verticalScrollBarThickness 16 -cr true`;
+
+columnLayout -parent $vsScroll -columnAttach "both" 5 -rowSpacing 3 -columnWidth 450 -adj true;
+
+string $ViewportUI = `button -label "Viewport Options" -command "createViewport20OptionsUI"`;
+string $resetViewport = `button -label "Reset" -command "reset" -bgc 0 0.4 0`;
+
+separator -h 20;
+//string $refreshGPUMemoryValues = `button -label "Refresh" -command "refresh"`;
+global string $gpuMemory;
+$gpuMemory = `text -label "GPU Memory Usage"`;
+separator -h 20;
+text -label "MAYA_OGS_GPU_MEMORY_LIMIT = 1024 \n\n Use above line in Maya.env file to limit GPU Memory\n Restart Maya to reflect changes";
+separator -h 20;
+
+global string $allCamera;
+$allCamera = `optionMenu -changeCommand "changeCamera"`;
+string $cameras[] = `ls -cameras`;
+$cameras = `sort $cameras`;
+for($item in $cameras)
+{
+   menuItem -label $item;
+}
+
+string $changeToRealtimeRender = `button -label "Set to Realtime Rendering" -command "autoSetRealtimeRendering" -bgc 0 0.4 0`;
+
+
+$vsDocker = `dockControl -ret false -area "left" -content $vsWindow	-label "Viewport" -allowedArea "all" vsDocker`;
+
+
+
+for($cam in `ls -cameras`)
+{
+    string $tmp = $cam;
+    string $check = `match "shot" $tmp`;
+    if($check == "")
+    {
+        setAttr ($cam + ".renderable") 0;
+    }
+    else
+    {
+        setAttr ($cam + ".renderable") 1;
+        optionMenu -edit -value $cam $allCamera;
+    }
+}
+
+scriptJob -parent $ViewportUI -e "idle" "refresh";
+
+global proc refresh()
+{
+    global string $gpuMemory;
+    string $tmp = `ogs -gpu`;
+    $tmp += "mb, ";
+    $tmp += `ogs -gpu -dt "total"`;
+    $tmp += "mb";
+    text -edit -label $tmp $gpuMemory;
+}
+
+global proc reset()
+{
+    ogs -reset;
+}
+
+global proc changeCamera()
+{
+    global string $allCamera;
+    string $rendercam = `optionMenu -query -value $allCamera`;
+    for($cam in `ls -cameras`)
+    {
+		setAttr ($cam + ".renderable") 0;
+    }
+    setAttr ($rendercam + ".renderable") 1;    
+}
+
+global proc autoSetRealtimeRendering()
+{
+    float $minTime = `playbackOptions -q -minTime`;
+    float $maxTime = `playbackOptions -q -maxTime`;
+    
+    setCurrentRenderer "mayaHardware2";
+    setAttr hardwareRenderingGlobals.renderMode 2 ;
+    colorManagementPrefs -edit -ote true;
+    setAttr "defaultRenderGlobals.imageFormat" 32;
+    setAttr "defaultRenderGlobals.startFrame" $minTime;
+    setAttr "defaultRenderGlobals.endFrame" $maxTime;
+    setAttr defaultResolution.width 1920;
+    setAttr defaultResolution.height 1080;
+    global string $allCamera;
+    string $rendercam = `optionMenu -query -value $allCamera`;
+    for($cam in `ls -cameras`)
+    {
+		setAttr ($cam + ".renderable") 0;
+    }
+    setAttr ($rendercam + ".renderable") 1;  
+    
+    setAttr defaultRenderGlobals.outFormatControl 0;
+    setAttr defaultRenderGlobals.animation 1;
+    setAttr defaultRenderGlobals.putFrameBeforeExt 1;
+    setAttr defaultRenderGlobals.extensionPadding 4;
+    setAttr "hardwareRenderingGlobals.hwFogEnable" 1;
+}
