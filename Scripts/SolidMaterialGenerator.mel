@@ -71,8 +71,13 @@ if(size($selectA)<=0){print("select object or faces please!");}else{
 float $r=$color.x;
 float $g=$color.y;
 float $b=$color.z;
-$crelambert=`shadingNode -as lambert`;
-setAttr ($crelambert+".color") -type double3  $r $g $b;
+string $name = "C_"+(int)($r*255)+"_"+(int)($g*255)+"_"+(int)($b*255);
+$crelambert = $name;
+if( !`objExists $crelambert` )
+{
+    $crelambert=`shadingNode -as lambert -n $name`;
+    setAttr ($crelambert+".color") -type double3  $r $g $b;
+}
 
 select $selectA;
 hyperShade -assign $crelambert;
